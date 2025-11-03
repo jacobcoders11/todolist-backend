@@ -3,6 +3,10 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 5000;
 
+const router = require('./routes');
+
+app.use("/api", router);
+
 app.get('/', (req, res) => {
     res.status(200).json({ message: 'Todo List Backend is running!' });
 });
