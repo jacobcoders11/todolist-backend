@@ -1,16 +1,33 @@
-const express = require('express');
+// Load environment variables
+require('dotenv').config();
 
+// Import libraries
+const express = require('express');
+const { connectToMySQL } = require('./database');
+
+// Create the app
 const app = express();
 const port = process.env.PORT || 5000;
 
-const router = require('./routes');
+// Middleware to read JSON from requests
+app.use(express.json());
 
+// Import routes
+const router = require('./routes');
 app.use("/api", router);
 
-app.get('/', (req, res) => {
-    res.status(200).json({ message: 'Todo List Backend is running!' });
-});
+// Start the server
+async function startServer() {
+    // Connect to database first
+    await connectToMySQL();
+    
+    // Then start listening for requests
+    app.listen(port, () => {
+        console.log(`Server running on http://localhost:${port}`);
+    });
+}
 
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-});
+startServer();
+
+
+
