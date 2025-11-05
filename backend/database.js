@@ -18,7 +18,7 @@ async function connectToMySQL() {
             database: process.env.DB_NAME     // todosdb
         });
 
-        console.log('✅ Connected to MySQL database');
+        console.log('Connected to MySQL database');
 
         // Create the todos table if it doesn't exist yet
         await connection.query(`

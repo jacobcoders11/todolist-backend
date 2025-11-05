@@ -1,47 +1,93 @@
 const express = require('express');
 const router = express.Router();
 const { getConnection } = require('../database');
+const { authenticateToken } = require('../middleware/auth'); // ← Import middleware
 
-// GET /api/todos - Get all todos
-router.get('/todos', async (req, res) => {
+/**
+ * @swagger
+ * /api/todos:
+ *   get:
+ *     summary: Get all todos (Protected)
+ *     tags: [Todos]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of all todos
+ *       401:
+ *         description: Unauthorized - No token provided
+ *       403:
+ *         description: Forbidden - Invalid token
+ *       500:
+ *         description: Server error
+ */
+// GET /api/todos - PROTECTED (need authentication)
+router.get('/todos', authenticateToken, async (req, res) => { // ← Add authenticateToken here
     try {
-        // Get database connection
         const connection = getConnection();
         
-        // Get all todos from database, newest first
+        // Optional: You can filter todos by logged-in user
+        // console.log('User ID:', req.user.userId);
+        
         const [todos] = await connection.query('SELECT * FROM todos ORDER BY created_at DESC');
-        
-        // Send todos as response
         res.json({ todos });
-        
     } catch (error) {
         console.error('Error getting todos:', error.message);
         res.status(500).json({ error: 'Failed to get todos' });
     }
 });
 
-// POST /api/todos - Create a new todo
-router.post('/todos', async (req, res) => {
+/**
+ * @swagger
+ * /api/todos:
+ *   post:
+ *     summary: Create a new todo (Protected)
+ *     tags: [Todos]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - todo
+ *             properties:
+ *               todo:
+ *                 type: object
+ *                 properties:
+ *                   title:
+ *                     type: string
+ *                     example: Buy groceries
+ *                   completed:
+ *                     type: boolean
+ *                     example: false
+ *     responses:
+ *       201:
+ *         description: Todo created successfully
+ *       401:
+ *         description: Unauthorized - No token
+ *       403:
+ *         description: Forbidden - Invalid token
+ */
+// POST /api/todos - PROTECTED (need authentication)
+router.post('/todos', authenticateToken, async (req, res) => { // ← Add authenticateToken
     try {
-        // Get the todo data from request
         const { todo } = req.body;
 
-        // Check if title exists
         if (!todo || !todo.title) {
             return res.status(400).json({ error: 'Todo title is required' });
         }
 
-        // Get database connection
         const connection = getConnection();
         
-        // Insert new todo into database
         const [result] = await connection.query(
             'INSERT INTO todos (title, completed) VALUES (?, ?)',
             [todo.title, todo.completed || false]
         );
 
-        // Send success response
-        res.status(201).json({ 
+        res.status(201).json({
             message: 'Todo created!',
             todo: {
                 id: result.insertId,
@@ -49,82 +95,124 @@ router.post('/todos', async (req, res) => {
                 completed: todo.completed || false
             }
         });
-        
     } catch (error) {
         console.error('Error creating todo:', error.message);
         res.status(500).json({ error: 'Failed to create todo' });
     }
 });
 
-// DELETE /api/todos/:id - Delete a todo
-router.delete('/todos/:id', async (req, res) => {
+/**
+ * @swagger
+ * /api/todos/{id}:
+ *   put:
+ *     summary: Update a todo (Protected)
+ *     tags: [Todos]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Todo ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               completed:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Todo updated
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Todo not found
+ */
+// PUT /api/todos/:id - PROTECTED (need authentication)
+router.put('/todos/:id', authenticateToken, async (req, res) => { // ← Add authenticateToken
     try {
-        // Get the id from URL
-        const { id } = req.params;
-
-        // Get database connection
-        const connection = getConnection();
-        
-        // Delete todo from database
-        const [result] = await connection.query('DELETE FROM todos WHERE id = ?', [id]);
-
-        // Check if todo was found and deleted
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Todo not found' });
-        }
-
-        // Send success response
-        res.json({ message: 'Todo deleted!' });
-        
-    } catch (error) {
-        console.error('Error deleting todo:', error.message);
-        res.status(500).json({ error: 'Failed to delete todo' });
-    }
-});
-
-// PUT /api/todos/:id - Update a todo (mark as complete/incomplete or edit title)
-router.put('/todos/:id', async (req, res) => {
-    try {
-        // Get the id from URL and data from body
         const { id } = req.params;
         const { completed, title } = req.body;
-
-        // Get database connection
         const connection = getConnection();
-        
-        // Build update query based on what's being updated
+
         let query, params;
-        
+
         if (title !== undefined && completed !== undefined) {
-            // Update both title and completed
             query = 'UPDATE todos SET title = ?, completed = ? WHERE id = ?';
             params = [title, completed, id];
         } else if (title !== undefined) {
-            // Update only title
             query = 'UPDATE todos SET title = ? WHERE id = ?';
             params = [title, id];
         } else if (completed !== undefined) {
-            // Update only completed status
             query = 'UPDATE todos SET completed = ? WHERE id = ?';
             params = [completed, id];
         } else {
             return res.status(400).json({ error: 'No update data provided' });
         }
-        
-        // Update todo in database
+
         const [result] = await connection.query(query, params);
 
-        // Check if todo was found and updated
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Todo not found' });
         }
 
-        // Send success response
         res.json({ message: 'Todo updated!' });
-        
     } catch (error) {
         console.error('Error updating todo:', error.message);
         res.status(500).json({ error: 'Failed to update todo' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/todos/{id}:
+ *   delete:
+ *     summary: Delete a todo (Protected)
+ *     tags: [Todos]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Todo ID
+ *     responses:
+ *       200:
+ *         description: Todo deleted
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Todo not found
+ */
+// DELETE /api/todos/:id - PROTECTED (need authentication)
+router.delete('/todos/:id', authenticateToken, async (req, res) => { // ← Add authenticateToken
+    try {
+        const { id } = req.params;
+        const connection = getConnection();
+
+        const [result] = await connection.query('DELETE FROM todos WHERE id = ?', [id]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Todo not found' });
+        }
+
+        res.json({ message: 'Todo deleted!' });
+    } catch (error) {
+        console.error('Error deleting todo:', error.message);
+        res.status(500).json({ error: 'Failed to delete todo' });
     }
 });
 
