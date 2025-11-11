@@ -19,6 +19,7 @@ const { getConnection } = require('../database');
  *             required:
  *               - name
  *               - email
+ *               - phone_number
  *               - password
  *               - role
  *             properties:
@@ -53,9 +54,42 @@ router.post('/register', async (req, res) => {
         // Get data from request body
         const { name, email, phone_number, password, role } = req.body;
 
-        // Validate required fields
-        if (!name || !email || !password || !role) {
+        // Validate required fields (including phone_number)
+        if (!name || !email || !phone_number || !password || !role) {
             return res.status(400).json({ error: 'All fields are required' });
+        }
+
+        // Validate name length
+        if (name.trim().length < 2) {
+            return res.status(400).json({ error: 'Name must be at least 2 characters' });
+        }
+
+        // Validate email format
+        const emailRegex = /\S+@\S+\.\S+/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: 'Please enter a valid email address' });
+        }
+
+        // Validate password length
+        if (password.length < 6) {
+            return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        }
+
+        // Validate phone number format
+        const phoneRegex = /^\+?[\d\s-()]+$/;
+        if (!phoneRegex.test(phone_number)) {
+            return res.status(400).json({ error: 'Please enter a valid phone number' });
+        }
+        
+        // Check phone number length (max 11 digits)
+        const digitsOnly = phone_number.replace(/\D/g, ''); // Remove non-digit characters
+        if (digitsOnly.length > 11) {
+            return res.status(400).json({ error: 'Phone number must be maximum 11 digits' });
+        }
+
+        // Validate role (must be 1 or 2)
+        if (![1, 2].includes(role)) {
+            return res.status(400).json({ error: 'Invalid role. Must be 1 (admin) or 2 (user)' });
         }
 
         // Get database connection
@@ -77,7 +111,7 @@ router.post('/register', async (req, res) => {
         // Insert new user into database
         const [result] = await connection.query(
             'INSERT INTO users (name, email, phone_number, password, role) VALUES (?, ?, ?, ?, ?)',
-            [name, email, phone_number || null, hashedPassword, role]
+            [name.trim(), email.trim(), phone_number, hashedPassword, role]
         );
 
         // Send success response

@@ -14,17 +14,20 @@ const port = process.env.PORT || 5000;
 app.use(express.json());
 
 // Setup Swagger documentation
-setupSwagger(app);  // ← ADD THIS
+setupSwagger(app); 
 
 // Import routes
 const todoRoutes = require('./routes');  // ← RENAME for clarity
-const authRoutes = require('./routes/auth');  // ← ADD THIS
-const userRoutes = require('./routes/users');  // ← ADD THIS
+const authRoutes = require('./routes/auth');  
+const userRoutes = require('./routes/users'); 
+const adminRoutes = require('./routes/admin');
 
 // Use routes
 app.use("/api", todoRoutes);  // ← Todo routes at /api/todos
-app.use("/api/auth", authRoutes);  // ← ADD THIS - Auth routes at /api/auth
-app.use("/api/users", userRoutes);  // ← ADD THIS - User routes at /api/users
+app.use("/api/auth", authRoutes);  // Auth routes at /api/auth
+app.use("/api/users", userRoutes);  // User routes at /api/users
+app.use("/api/admin", adminRoutes);  // Admin routes at /api/admin
+
 
 // Start the server
 async function startServer() {

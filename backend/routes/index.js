@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const { getConnection } = require('../database');
-const { authenticateToken } = require('../middleware/auth'); // ← Import middleware
+const { authenticateToken } = require('../middleware/auth');
 
 /**
  * @swagger
  * /api/todos:
  *   get:
- *     summary: Get all todos (Protected)
+ *     summary: Get all todos for authenticated user (Protected)
  *     tags: [Todos]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of all todos
+ *         description: List of user's todos
  *       401:
  *         description: Unauthorized - No token provided
  *       403:
@@ -21,15 +21,18 @@ const { authenticateToken } = require('../middleware/auth'); // ← Import middl
  *       500:
  *         description: Server error
  */
-// GET /api/todos - PROTECTED (need authentication)
-router.get('/todos', authenticateToken, async (req, res) => { // ← Add authenticateToken here
+// GET /api/todos - Get only authenticated user's todos
+router.get('/todos', authenticateToken, async (req, res) => {
     try {
         const connection = getConnection();
+        const userId = req.user.userId; // Get user ID from JWT token
         
-        // Optional: You can filter todos by logged-in user
-        // console.log('User ID:', req.user.userId);
+        // Filter todos by user_id
+        const [todos] = await connection.query(
+            'SELECT * FROM todos WHERE user_id = ? ORDER BY created_at DESC',
+            [userId]
+        );
         
-        const [todos] = await connection.query('SELECT * FROM todos ORDER BY created_at DESC');
         res.json({ todos });
     } catch (error) {
         console.error('Error getting todos:', error.message);
@@ -71,10 +74,11 @@ router.get('/todos', authenticateToken, async (req, res) => { // ← Add authent
  *       403:
  *         description: Forbidden - Invalid token
  */
-// POST /api/todos - PROTECTED (need authentication)
-router.post('/todos', authenticateToken, async (req, res) => { // ← Add authenticateToken
+// POST /api/todos - Create todo for authenticated user
+router.post('/todos', authenticateToken, async (req, res) => {
     try {
         const { todo } = req.body;
+        const userId = req.user.userId; // Get user ID from JWT token
 
         if (!todo || !todo.title) {
             return res.status(400).json({ error: 'Todo title is required' });
@@ -82,15 +86,17 @@ router.post('/todos', authenticateToken, async (req, res) => { // ← Add authen
 
         const connection = getConnection();
         
+        // Insert with user_id
         const [result] = await connection.query(
-            'INSERT INTO todos (title, completed) VALUES (?, ?)',
-            [todo.title, todo.completed || false]
+            'INSERT INTO todos (user_id, title, completed) VALUES (?, ?, ?)',
+            [userId, todo.title, todo.completed || false]
         );
 
         res.status(201).json({
             message: 'Todo created!',
             todo: {
                 id: result.insertId,
+                user_id: userId,
                 title: todo.title,
                 completed: todo.completed || false
             }
@@ -133,28 +139,30 @@ router.post('/todos', authenticateToken, async (req, res) => { // ← Add authen
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Not your todo
  *       404:
  *         description: Todo not found
  */
-// PUT /api/todos/:id - PROTECTED (need authentication)
-router.put('/todos/:id', authenticateToken, async (req, res) => { // ← Add authenticateToken
+// PUT /api/todos/:id - Update only user's own todo
+router.put('/todos/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const { completed, title } = req.body;
+        const userId = req.user.userId; // Get user ID from JWT token
         const connection = getConnection();
 
         let query, params;
 
+        // Update only if todo belongs to user
         if (title !== undefined && completed !== undefined) {
-            query = 'UPDATE todos SET title = ?, completed = ? WHERE id = ?';
-            params = [title, completed, id];
+            query = 'UPDATE todos SET title = ?, completed = ? WHERE id = ? AND user_id = ?';
+            params = [title, completed, id, userId];
         } else if (title !== undefined) {
-            query = 'UPDATE todos SET title = ? WHERE id = ?';
-            params = [title, id];
+            query = 'UPDATE todos SET title = ? WHERE id = ? AND user_id = ?';
+            params = [title, id, userId];
         } else if (completed !== undefined) {
-            query = 'UPDATE todos SET completed = ? WHERE id = ?';
-            params = [completed, id];
+            query = 'UPDATE todos SET completed = ? WHERE id = ? AND user_id = ?';
+            params = [completed, id, userId];
         } else {
             return res.status(400).json({ error: 'No update data provided' });
         }
@@ -162,7 +170,7 @@ router.put('/todos/:id', authenticateToken, async (req, res) => { // ← Add aut
         const [result] = await connection.query(query, params);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Todo not found' });
+            return res.status(404).json({ error: 'Todo not found or unauthorized' });
         }
 
         res.json({ message: 'Todo updated!' });
@@ -193,20 +201,25 @@ router.put('/todos/:id', authenticateToken, async (req, res) => { // ← Add aut
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Not your todo
  *       404:
  *         description: Todo not found
  */
-// DELETE /api/todos/:id - PROTECTED (need authentication)
-router.delete('/todos/:id', authenticateToken, async (req, res) => { // ← Add authenticateToken
+// DELETE /api/todos/:id - Delete only user's own todo
+router.delete('/todos/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.userId; // Get user ID from JWT token
         const connection = getConnection();
 
-        const [result] = await connection.query('DELETE FROM todos WHERE id = ?', [id]);
+        // Delete only if todo belongs to user
+        const [result] = await connection.query(
+            'DELETE FROM todos WHERE id = ? AND user_id = ?',
+            [id, userId]
+        );
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Todo not found' });
+            return res.status(404).json({ error: 'Todo not found or unauthorized' });
         }
 
         res.json({ message: 'Todo deleted!' });
