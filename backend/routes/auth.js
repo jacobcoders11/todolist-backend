@@ -226,7 +226,7 @@ router.post('/login', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error logging in:', error.message);
+        console.error('Error logging in:', error.message);
         res.status(500).json({ error: 'Failed to login' });
     }
 });
